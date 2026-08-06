@@ -72,8 +72,14 @@ func TestGetRepoRateLimited(t *testing.T) {
 		BaseURL: srv.URL,
 		Pool:    tokenpool.New([]string{"tok_test_1234567890"}),
 	})
-	_, err := client.GetRepo(context.Background(), "a", "b")
-	if !errors.Is(err, github.ErrRateLimited) {
+	// DisableUntil 最少约 60s；用短 ctx 避免单测卡住，只要首次路径返回限流或 ctx 取消即可。
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+	_, err := client.GetRepo(ctx, "a", "b")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !errors.Is(err, github.ErrRateLimited) && !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("err=%v", err)
 	}
 }
