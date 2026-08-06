@@ -1,0 +1,69 @@
+// Package env 提供各 API server.FromEnv 共用的环境变量读取小工具。
+//
+// 只做纯解析，不 log.Fatal；缺配置由调用方决定是否退出。
+package env
+
+import (
+	"fmt"
+	"os"
+	"strconv"
+	"strings"
+	"time"
+)
+
+// LookupRequired 读取非空环境变量。
+func LookupRequired(key string) (string, error) {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return "", fmt.Errorf("%s env is required", key)
+	}
+	return value, nil
+}
+
+// OrDefault 读取环境变量，空则返回 fallback。
+func OrDefault(key, fallback string) string {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	return value
+}
+
+// CSV 解析逗号分隔列表，自动 trim 并跳过空段。
+func CSV(raw string) []string {
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// RequiredCSV 读取必填 CSV 环境变量。
+func RequiredCSV(key string) ([]string, error) {
+	raw, err := LookupRequired(key)
+	if err != nil {
+		return nil, err
+	}
+	out := CSV(raw)
+	if len(out) == 0 {
+		return nil, fmt.Errorf("%s env is required", key)
+	}
+	return out, nil
+}
+
+// DurationSeconds 读取正整秒数；非法或空时返回 fallback。
+func DurationSeconds(key string, fallback time.Duration) time.Duration {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	seconds, err := strconv.Atoi(value)
+	if err != nil || seconds <= 0 {
+		return fallback
+	}
+	return time.Duration(seconds) * time.Second
+}
