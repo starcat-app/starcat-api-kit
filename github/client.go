@@ -31,6 +31,7 @@ type Repo struct {
 	Description   *string
 	Homepage      *string
 	Language      *string
+	HTMLURL       string
 	Stars         int
 	Forks         int
 	Watchers      int
@@ -42,6 +43,7 @@ type Repo struct {
 	Archived      bool
 	Fork          bool
 	Private       bool
+	IsTemplate    bool
 	DefaultBranch string
 	PushedAt      string
 	UpdatedAt     string
@@ -58,24 +60,26 @@ func (e *HTTPError) Error() string { return e.Message }
 
 // Client 统一 GitHub REST 客户端。
 type Client struct {
-	baseURL   string
-	userAgent string
-	http      *http.Client
-	pool      *tokenpool.Pool
-	limiter   *RateLimitHandler
+	baseURL        string
+	userAgent      string
+	http           *http.Client
+	pool           *tokenpool.Pool
+	limiter        *RateLimitHandler
+	allowAnonymous bool
 }
 
 // Options 控制 Client 装配。
 type Options struct {
-	BaseURL    string
-	UserAgent  string
-	HTTPClient *http.Client
-	Pool       *tokenpool.Pool
-	Limiter    *RateLimitHandler
-	Timeout    time.Duration
+	BaseURL        string
+	UserAgent      string
+	HTTPClient     *http.Client
+	Pool           *tokenpool.Pool
+	Limiter        *RateLimitHandler
+	Timeout        time.Duration
+	AllowAnonymous bool // pool 无 token 时允许匿名请求（sharing 预览页场景）
 }
 
-// NewClient 创建客户端。Pool 必填（可含空 token 列表，但 GetRepo 需要可用 token）。
+// NewClient 创建客户端。Pool 必填（可含空 token 列表；AllowAnonymous 时允许无 token）。
 func NewClient(opt Options) *Client {
 	if opt.Pool == nil {
 		opt.Pool = tokenpool.New(nil)
@@ -97,16 +101,24 @@ func NewClient(opt Options) *Client {
 		ua = "starcat-api-kit"
 	}
 	return &Client{
-		baseURL:   baseURL,
-		userAgent: ua,
-		http:      httpClient,
-		pool:      opt.Pool,
-		limiter:   opt.Limiter,
+		baseURL:        baseURL,
+		userAgent:      ua,
+		http:           httpClient,
+		pool:           opt.Pool,
+		limiter:        opt.Limiter,
+		allowAnonymous: opt.AllowAnonymous,
 	}
 }
 
 // SetBaseURL 覆盖 API 基础 URL（测试用）。
 func (c *Client) SetBaseURL(url string) { c.baseURL = strings.TrimRight(url, "/") }
+
+// SetHTTPClient 覆盖 HTTP 客户端（测试用）。
+func (c *Client) SetHTTPClient(client *http.Client) {
+	if client != nil {
+		c.http = client
+	}
+}
 
 // GetRepo 调 GET /repos/{owner}/{repo}，最多重试 3 次。
 func (c *Client) GetRepo(ctx context.Context, owner, repo string) (*Repo, error) {
@@ -130,19 +142,9 @@ func (c *Client) GetRepo(ctx context.Context, owner, repo string) (*Repo, error)
 }
 
 func (c *Client) getRepoOnce(ctx context.Context, owner, repo string) (*Repo, error) {
-	token := c.pool.PickBest()
-	if token == nil {
-		resetAt := c.pool.EarliestReset()
-		if !resetAt.IsZero() && resetAt.After(time.Now()) {
-			d := time.Until(resetAt)
-			log.Printf("[github] no tokens, sleeping %v until %s", d.Round(time.Second), resetAt.Format(time.RFC3339))
-			select {
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			case <-time.After(d):
-			}
-		}
-		return nil, ErrRateLimited
+	token, tokenValue, err := c.pickAuth(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	if c.limiter != nil {
@@ -154,7 +156,7 @@ func (c *Client) getRepoOnce(ctx context.Context, owner, repo string) (*Repo, er
 	if err != nil {
 		return nil, err
 	}
-	c.setHeaders(req, token.Value)
+	c.setHeaders(req, tokenValue)
 
 	resp, err := c.http.Do(req)
 	if err != nil {
@@ -162,7 +164,9 @@ func (c *Client) getRepoOnce(ctx context.Context, owner, repo string) (*Repo, er
 	}
 	defer resp.Body.Close()
 
-	c.pool.UpdateFromResponse(token, resp)
+	if token != nil {
+		c.pool.UpdateFromResponse(token, resp)
+	}
 
 	switch resp.StatusCode {
 	case http.StatusOK:
@@ -174,15 +178,43 @@ func (c *Client) getRepoOnce(ctx context.Context, owner, repo string) (*Repo, er
 	case http.StatusNotFound:
 		return nil, ErrRepoNotFound
 	case http.StatusForbidden, http.StatusTooManyRequests:
-		c.handleRateLimit(resp, token)
+		if token != nil {
+			c.handleRateLimit(resp, token)
+		}
 		return nil, ErrRateLimited
 	case http.StatusUnauthorized:
+		// 匿名 401 对调用方等同不可用；有 token 时上层会换 token 重试。
+		if token == nil {
+			return nil, ErrRepoNotFound
+		}
 		return nil, &HTTPError{StatusCode: resp.StatusCode, Message: "unauthorized"}
 	default:
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
 		msg := fmt.Sprintf("GitHub /repos/%s/%s HTTP %d: %s", owner, repo, resp.StatusCode, strings.TrimSpace(string(body)))
 		return nil, &HTTPError{StatusCode: resp.StatusCode, Message: msg}
 	}
+}
+
+// pickAuth 选择 Bearer token；AllowAnonymous 且 pool 为空时允许匿名。
+func (c *Client) pickAuth(ctx context.Context) (*tokenpool.TokenState, string, error) {
+	token := c.pool.PickBest()
+	if token != nil {
+		return token, token.Value, nil
+	}
+	if c.allowAnonymous && c.pool.Count() == 0 {
+		return nil, "", nil
+	}
+	resetAt := c.pool.EarliestReset()
+	if !resetAt.IsZero() && resetAt.After(time.Now()) {
+		d := time.Until(resetAt)
+		log.Printf("[github] no tokens, sleeping %v until %s", d.Round(time.Second), resetAt.Format(time.RFC3339))
+		select {
+		case <-ctx.Done():
+			return nil, "", ctx.Err()
+		case <-time.After(d):
+		}
+	}
+	return nil, "", ErrRateLimited
 }
 
 // GetReadme 调 GET /repos/{owner}/{repo}/readme，返回解码后的 Markdown 文本。
@@ -293,6 +325,7 @@ type repoAPIResponse struct {
 	Description   *string  `json:"description"`
 	Homepage      *string  `json:"homepage"`
 	Language      *string  `json:"language"`
+	HTMLURL       string   `json:"html_url"`
 	Stars         int      `json:"stargazers_count"`
 	Forks         int      `json:"forks_count"`
 	Watchers      int      `json:"watchers_count"`
@@ -302,6 +335,7 @@ type repoAPIResponse struct {
 	Archived      bool     `json:"archived"`
 	Fork          bool     `json:"fork"`
 	Private       bool     `json:"private"`
+	IsTemplate    bool     `json:"is_template"`
 	DefaultBranch string   `json:"default_branch"`
 	PushedAt      string   `json:"pushed_at"`
 	UpdatedAt     string   `json:"updated_at"`
@@ -323,6 +357,7 @@ func (r *repoAPIResponse) toRepo() *Repo {
 		Description:   r.Description,
 		Homepage:      r.Homepage,
 		Language:      r.Language,
+		HTMLURL:       r.HTMLURL,
 		Stars:         r.Stars,
 		Forks:         r.Forks,
 		Watchers:      r.Watchers,
@@ -332,6 +367,7 @@ func (r *repoAPIResponse) toRepo() *Repo {
 		Archived:      r.Archived,
 		Fork:          r.Fork,
 		Private:       r.Private,
+		IsTemplate:    r.IsTemplate,
 		DefaultBranch: r.DefaultBranch,
 		PushedAt:      r.PushedAt,
 		UpdatedAt:     r.UpdatedAt,

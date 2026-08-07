@@ -83,3 +83,34 @@ func TestGetRepoRateLimited(t *testing.T) {
 		t.Fatalf("err=%v", err)
 	}
 }
+
+func TestGetRepoAnonymousOK(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "" {
+			t.Fatalf("anonymous request should not send Authorization, got %q", r.Header.Get("Authorization"))
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"id":               1,
+			"name":             "Starcat",
+			"full_name":        "starcat-app/Starcat",
+			"html_url":         "https://github.com/starcat-app/Starcat",
+			"is_template":      false,
+			"stargazers_count": 10,
+			"owner":            map[string]any{"login": "starcat-app"},
+		})
+	}))
+	defer srv.Close()
+
+	client := github.NewClient(github.Options{
+		BaseURL:        srv.URL,
+		Pool:           tokenpool.New(nil),
+		AllowAnonymous: true,
+	})
+	repo, err := client.GetRepo(context.Background(), "starcat-app", "Starcat")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if repo.HTMLURL == "" || repo.Owner != "starcat-app" {
+		t.Fatalf("repo=%+v", repo)
+	}
+}

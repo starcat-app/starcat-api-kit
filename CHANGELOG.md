@@ -6,8 +6,10 @@ All notable changes to Starcat API Kit are documented here.
 
 ### Added
 - `github`：带 tokenpool 的 `GetRepo` / `GetReadme`、`RateLimitHandler`、中立 `Repo` DTO
+- `github.Options.AllowAnonymous`：pool 无 token 时允许匿名 GetRepo（sharing 公开预览）
+- `github.Repo` 补齐 `HTMLURL` / `IsTemplate`；`Client.SetHTTPClient` 测试钩子
 - `httputil.HandlePingV1`：统一 `/api/v1/ping` envelope 响应
-- `env`：`LookupRequired` / `CSV` / `OrDefault` / `DurationSeconds`
+- `env`：`LookupRequired` / `CSV` / `OrDefault` / `DurationSeconds` / `RequiredCSV`
 
 ## [0.1.0] - 2026-08-07
 
