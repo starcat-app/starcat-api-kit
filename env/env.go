@@ -67,3 +67,47 @@ func DurationSeconds(key string, fallback time.Duration) time.Duration {
 	}
 	return time.Duration(seconds) * time.Second
 }
+
+// LookupCSV 读取可选 CSV 环境变量；空或不存在时返回 nil。
+func LookupCSV(key string) []string {
+	return CSV(os.Getenv(key))
+}
+
+// Int 读取正整数环境变量；空 / 非法 / ≤0 时返回 fallback。
+func Int(key string, fallback int) int {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	n, err := strconv.Atoi(value)
+	if err != nil || n <= 0 {
+		return fallback
+	}
+	return n
+}
+
+// Int64 读取正 int64 环境变量；空 / 非法 / ≤0 时返回 fallback。
+func Int64(key string, fallback int64) int64 {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	n, err := strconv.ParseInt(value, 10, 64)
+	if err != nil || n <= 0 {
+		return fallback
+	}
+	return n
+}
+
+// Bool 读取布尔环境变量（strconv.ParseBool）；空或非法时返回 fallback。
+func Bool(key string, fallback bool) bool {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return fallback
+	}
+	value, err := strconv.ParseBool(raw)
+	if err != nil {
+		return fallback
+	}
+	return value
+}

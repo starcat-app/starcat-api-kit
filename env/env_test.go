@@ -29,3 +29,27 @@ func TestCSVAndDuration(t *testing.T) {
 		t.Fatalf("duration=%v", got)
 	}
 }
+
+func TestIntBoolLookupCSV(t *testing.T) {
+	t.Setenv("KIT_ENV_INT", "42")
+	if got := env.Int("KIT_ENV_INT", 1); got != 42 {
+		t.Fatalf("Int=%d", got)
+	}
+	if got := env.Int("KIT_ENV_INT_MISSING", 7); got != 7 {
+		t.Fatalf("Int fallback=%d", got)
+	}
+	t.Setenv("KIT_ENV_BOOL", "true")
+	if !env.Bool("KIT_ENV_BOOL", false) {
+		t.Fatal("Bool want true")
+	}
+	if env.Bool("KIT_ENV_BOOL_MISSING", true) != true {
+		t.Fatal("Bool fallback")
+	}
+	t.Setenv("KIT_ENV_CSV", "x, y")
+	if got := env.LookupCSV("KIT_ENV_CSV"); len(got) != 2 || got[0] != "x" {
+		t.Fatalf("LookupCSV=%v", got)
+	}
+	if got := env.LookupCSV("KIT_ENV_CSV_EMPTY"); got != nil && len(got) != 0 {
+		t.Fatalf("empty LookupCSV=%v", got)
+	}
+}

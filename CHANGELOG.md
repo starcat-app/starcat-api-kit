@@ -10,6 +10,7 @@ All notable changes to Starcat API Kit are documented here.
 - `github.Repo` 补齐 `HTMLURL` / `IsTemplate`；`Client.SetHTTPClient` 测试钩子
 - `httputil.HandlePingV1`：统一 `/api/v1/ping` envelope 响应
 - `env`：`LookupRequired` / `CSV` / `OrDefault` / `DurationSeconds` / `RequiredCSV`
+- `env`：`LookupCSV` / `Int` / `Int64` / `Bool`（供各 API FromEnv 共用）
 
 ## [0.1.0] - 2026-08-07
 
