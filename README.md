@@ -80,11 +80,21 @@ Individual API repos keep thin `internal/*` wrappers so existing import paths st
 go test ./...
 ```
 
-Local consumers should use a `replace` until the module is published:
+Consumers should depend on a released module version:
 
-```go
-replace github.com/starcat-app/starcat-api-kit => ../starcat-api-kit
+```bash
+go get github.com/starcat-app/starcat-api-kit@v0.2.0
 ```
+
+For local changes spanning the kit and a consumer, use a temporary Go workspace
+from their parent directory:
+
+```bash
+go work init ./starcat-api-kit ./starcat-wiki-api
+```
+
+Do not commit a sibling `replace` directive to a consumer module: standalone
+clones and CI runners do not contain that sibling path.
 
 ## Contributing
 
