@@ -80,11 +80,20 @@ Starcat API 共享 Go 包：Bearer 鉴权、响应 envelope、CORS、GitHub 访�
 go test ./...
 ```
 
-发布前本地消费方使用：
+业务 API 应依赖已发布的模块版本：
 
-```go
-replace github.com/starcat-app/starcat-api-kit => ../starcat-api-kit
+```bash
+go get github.com/starcat-app/starcat-api-kit@v0.2.0
 ```
+
+需要同时修改 kit 和业务 API 时，在它们的父目录创建临时 Go workspace：
+
+```bash
+go work init ./starcat-api-kit ./starcat-wiki-api
+```
+
+不要把指向兄弟目录的 `replace` 提交到业务模块；独立 clone 和 CI runner
+中不存在该兄弟路径。
 
 ## 贡献 / 安全 / 支持
 
