@@ -58,7 +58,7 @@ brew install --cask starcat
 
 <sub><a href="./README.md">English</a></sub>
 
-Starcat API 共享 Go 包：Bearer 鉴权、响应 envelope、CORS、GitHub 访问、环境变量解析、ping handler 与 Token Pool。
+Starcat API 共享 Go 包：Bearer 鉴权、响应 envelope、CORS、GitHub 访问、环境变量解析、ping handler、Token Pool 与隐私安全的请求指标。
 
 ## 包一览
 
@@ -70,9 +70,16 @@ Starcat API 共享 Go 包：Bearer 鉴权、响应 envelope、CORS、GitHub 访�
 | `envelope` | `github.com/starcat-app/starcat-api-kit/envelope` | 统一 JSON envelope（Meta 为字段并集） |
 | `github` | `github.com/starcat-app/starcat-api-kit/github` | GitHub Client 与 Rate Limit 处理 |
 | `httputil` | `github.com/starcat-app/starcat-api-kit/httputil` | 标准 API ping handler |
+| `metrics` | `github.com/starcat-app/starcat-api-kit/metrics` | 路由调用指标、SQLite 聚合与受控查询接口 |
 | `tokenpool` | `github.com/starcat-app/starcat-api-kit/tokenpool` | GitHub PAT 池 |
 
 各业务 API 通过薄 `internal/*` 别名包装本库，避免业务代码大面积改 import。
+
+### 请求指标
+
+`metrics.Collector` 包装根 `http.Handler`，只在内存中保留匹配后的路由模板，并把分钟、小时、天
+聚合写入独立 SQLite。各服务把 `metrics.Handler` 方法挂在现有 Bearer 鉴权之后。指标不会保存真实
+路径、Query、凭据、请求体、IP 或 User-Agent，且排除 `/internal/metrics/*`，避免控制台轮询污染数据。
 
 ## 开发
 
@@ -83,7 +90,7 @@ go test ./...
 业务 API 应依赖已发布的模块版本：
 
 ```bash
-go get github.com/starcat-app/starcat-api-kit@v0.2.0
+go get github.com/starcat-app/starcat-api-kit@v0.3.0
 ```
 
 需要同时修改 kit 和业务 API 时，在它们的父目录创建临时 Go workspace：

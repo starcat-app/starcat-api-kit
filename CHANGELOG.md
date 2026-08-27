@@ -2,6 +2,11 @@
 
 All notable changes to Starcat API Kit are documented here.
 
+## [0.3.0] - 2026-08-27
+
+### Added
+- `metrics`：统一采集接口请求量、错误量、延迟、状态码和路由维度，并提供 summary、timeseries、routes 与 status-codes 查询接口。
+
 ## [0.2.0] - 2026-08-07
 
 ### Added
@@ -17,5 +22,6 @@ All notable changes to Starcat API Kit are documented here.
 ### Added
 - `auth` / `cors` / `envelope` / `tokenpool` 初版（供各业务 API 薄包装）
 
+[0.3.0]: https://github.com/starcat-app/starcat-api-kit/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/starcat-app/starcat-api-kit/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/starcat-app/starcat-api-kit/releases/tag/v0.1.0
