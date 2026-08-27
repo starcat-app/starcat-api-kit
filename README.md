@@ -58,7 +58,7 @@ brew install --cask starcat
 
 <sub><a href="./README-ZH.md">中文说明</a></sub>
 
-Shared Go packages for Starcat APIs: Bearer auth, response envelopes, CORS, GitHub access, environment parsing, ping handlers, and token pools.
+Shared Go packages for Starcat APIs: Bearer auth, response envelopes, CORS, GitHub access, environment parsing, ping handlers, token pools, and privacy-preserving request metrics.
 
 ## Packages
 
@@ -70,9 +70,17 @@ Shared Go packages for Starcat APIs: Bearer auth, response envelopes, CORS, GitH
 | `envelope` | `github.com/starcat-app/starcat-api-kit/envelope` | Unified JSON response envelope (Meta is the field union) |
 | `github` | `github.com/starcat-app/starcat-api-kit/github` | GitHub client and rate-limit handling |
 | `httputil` | `github.com/starcat-app/starcat-api-kit/httputil` | Standard API ping handler |
+| `metrics` | `github.com/starcat-app/starcat-api-kit/metrics` | Privacy-preserving route metrics, SQLite rollups, and bounded REST queries |
 | `tokenpool` | `github.com/starcat-app/starcat-api-kit/tokenpool` | GitHub PAT pool with quota-aware pick |
 
 Individual API repos keep thin `internal/*` wrappers so existing import paths stay stable.
+
+### Request metrics
+
+`metrics.Collector` wraps the root `http.Handler`, keeps only matched route templates in memory, and flushes
+minute/hour/day aggregates to a dedicated SQLite database. Register `metrics.Handler` methods behind the
+service's existing Bearer auth. The package never stores raw paths, query strings, credentials, request bodies,
+IP addresses, or user agents; `/internal/metrics/*` is excluded to prevent polling feedback.
 
 ## Development
 
@@ -83,7 +91,7 @@ go test ./...
 Consumers should depend on a released module version:
 
 ```bash
-go get github.com/starcat-app/starcat-api-kit@v0.2.0
+go get github.com/starcat-app/starcat-api-kit@v0.3.0
 ```
 
 For local changes spanning the kit and a consumer, use a temporary Go workspace
