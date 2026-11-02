@@ -2,6 +2,13 @@
 
 All notable changes to Starcat API Kit are documented here.
 
+## [Unreleased]
+
+### Security
+
+- Require the patched Go 1.26.10 toolchain and check known reachable vulnerabilities in CI.
+- Upgrade `golang.org/x/sys` to v0.44.0 to address the Windows Unicode string overflow advisory.
+
 ## [0.3.0] - 2026-08-27
 
 ### Added

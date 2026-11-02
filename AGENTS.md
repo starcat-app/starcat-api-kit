@@ -9,7 +9,7 @@ Starcat 各 HTTP API 共享的 Go 库：Bearer 鉴权、JSON envelope、CORS、�
 
 ## 技术栈
 
-- Go 1.25.0
+- Go 1.26.10
 - `modernc.org/sqlite`（metrics 持久化）
 - 无 HTTP 服务、无 Dockerfile、无 Makefile
 
