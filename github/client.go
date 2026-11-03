@@ -41,6 +41,7 @@ type Repo struct {
 	LicenseSpdx   *string
 	OwnerAvatar   *string
 	Archived      bool
+	Disabled      bool
 	Fork          bool
 	Private       bool
 	IsTemplate    bool
@@ -142,6 +143,19 @@ func (c *Client) GetRepo(ctx context.Context, owner, repo string) (*Repo, error)
 }
 
 func (c *Client) getRepoOnce(ctx context.Context, owner, repo string) (*Repo, error) {
+	return c.getRepositoryPath(ctx, fmt.Sprintf("/repos/%s/%s", owner, repo))
+}
+
+// GetRepoByID 只查询固定 GitHub host 下的仓库 ID，避免依赖可能重命名的 owner/name。
+// 冷启动推荐只执行一次有界请求；限流交给调用方缓存与退避，不在用户请求内反复重试。
+func (c *Client) GetRepoByID(ctx context.Context, repoID int64) (*Repo, error) {
+	if repoID <= 0 {
+		return nil, fmt.Errorf("repo id must be positive")
+	}
+	return c.getRepositoryPath(ctx, fmt.Sprintf("/repositories/%d", repoID))
+}
+
+func (c *Client) getRepositoryPath(ctx context.Context, path string) (*Repo, error) {
 	token, tokenValue, err := c.pickAuth(ctx)
 	if err != nil {
 		return nil, err
@@ -151,7 +165,7 @@ func (c *Client) getRepoOnce(ctx context.Context, owner, repo string) (*Repo, er
 		c.limiter.Wait()
 	}
 
-	url := fmt.Sprintf("%s/repos/%s/%s", c.baseURL, owner, repo)
+	url := c.baseURL + path
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
@@ -190,7 +204,7 @@ func (c *Client) getRepoOnce(ctx context.Context, owner, repo string) (*Repo, er
 		return nil, &HTTPError{StatusCode: resp.StatusCode, Message: "unauthorized"}
 	default:
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		msg := fmt.Sprintf("GitHub /repos/%s/%s HTTP %d: %s", owner, repo, resp.StatusCode, strings.TrimSpace(string(body)))
+		msg := fmt.Sprintf("GitHub %s HTTP %d: %s", path, resp.StatusCode, strings.TrimSpace(string(body)))
 		return nil, &HTTPError{StatusCode: resp.StatusCode, Message: msg}
 	}
 }
@@ -333,6 +347,7 @@ type repoAPIResponse struct {
 	OpenIssues    int      `json:"open_issues_count"`
 	Topics        []string `json:"topics"`
 	Archived      bool     `json:"archived"`
+	Disabled      bool     `json:"disabled"`
 	Fork          bool     `json:"fork"`
 	Private       bool     `json:"private"`
 	IsTemplate    bool     `json:"is_template"`
@@ -365,6 +380,7 @@ func (r *repoAPIResponse) toRepo() *Repo {
 		OpenIssues:    r.OpenIssues,
 		Topics:        r.Topics,
 		Archived:      r.Archived,
+		Disabled:      r.Disabled,
 		Fork:          r.Fork,
 		Private:       r.Private,
 		IsTemplate:    r.IsTemplate,

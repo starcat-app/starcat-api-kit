@@ -47,6 +47,26 @@ func TestGetRepoOK(t *testing.T) {
 	}
 }
 
+// 固定数值 ID 路由不得变成搜索或任意 URL；Private/Disabled 必须完整透传给门禁。
+func TestGetRepoByIDVisibilityAndSingleRequest(t *testing.T) {
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if r.URL.Path != "/repositories/42" {
+			t.Errorf("unexpected path %s", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{"id":42,"full_name":"test/repo","private":true,"disabled":true}`))
+	}))
+	defer srv.Close()
+	client := github.NewClient(github.Options{BaseURL: srv.URL, AllowAnonymous: true})
+	repo, err := client.GetRepoByID(context.Background(), 42)
+	if err != nil || repo == nil || !repo.Private || !repo.Disabled || calls != 1 {
+		t.Fatalf("visibility or request budget failed: err=%v calls=%d", err, calls)
+	}
+	if _, err := client.GetRepoByID(context.Background(), -1); err == nil || calls != 1 {
+		t.Fatal("invalid ID must not reach network")
+	}
+}
 func TestGetRepoNotFound(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
